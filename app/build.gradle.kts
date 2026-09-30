@@ -1,7 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// Optional shared signing key. app/signing.p12 is not committed; to use it, put the keystore there
+// and set autolyrics.signing.password in local.properties (or AUTOLYRICS_SIGNING_PASSWORD).
+// Without it, builds are signed with the standard Android debug key.
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+val sharedKeystore = file("signing.p12")
+val sharedKeystorePassword: String? = localProperties.getProperty("autolyrics.signing.password")
+    ?: System.getenv("AUTOLYRICS_SIGNING_PASSWORD")
 
 android {
     namespace = "com.autolyrics"
@@ -16,11 +28,13 @@ android {
     }
 
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("signing.p12")
-            storePassword = "autolyrics"
-            keyAlias = "autolyrics"
-            keyPassword = "autolyrics"
+        if (sharedKeystore.exists() && sharedKeystorePassword != null) {
+            getByName("debug") {
+                storeFile = sharedKeystore
+                storePassword = sharedKeystorePassword
+                keyAlias = "autolyrics"
+                keyPassword = sharedKeystorePassword
+            }
         }
     }
 

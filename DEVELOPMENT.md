@@ -83,7 +83,7 @@ AutoLyricsApp (Application)
 | `app/build.gradle.kts` | Dependencies, SDK versions, signing config, version management. |
 | `AndroidManifest.xml` | Components, permissions, AA metadata. |
 | `.github/workflows/build.yml` | CI: build APK, create GitHub release with versioned filename. |
-| `app/signing.p12` | Shared signing keystore (avoids version conflicts across CI runs). |
+| `app/signing.p12` | Optional shared signing keystore. Not committed; see the comment at the top of `app/build.gradle.kts`. |
 
 ## Key Constants (`LyricsBrowserService`)
 
