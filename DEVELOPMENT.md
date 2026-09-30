@@ -4,8 +4,8 @@
 
 | Term | Meaning |
 |---|---|
-| **Full lyrics view** (AA) | The scrollable browse-tree list of lyric lines on Android Auto, powered by `onLoadChildren()`. Shows a windowed subset of lines. |
-| **Fast-updating screen** / **Now-playing card** (AA) | The Android Auto now-playing card. Displays title, artist, album art, and a subtitle (current lyric) via `MediaMetadataCompat`. Updated every 300ms. |
+| **Full lyrics view** (AA) | The scrollable browse-tree list of lyric lines on Android Auto, powered by `onLoadChildren()`. Shows a windowed subset of 4 lines (1 before the active line, the active line, and 2 after), with the active line bright/bold and others dimmed (best-effort text styling — not guaranteed on every host, since this is a `MediaBrowserServiceCompat` list, not a Car App Library template). |
+| **Fast-updating screen** / **Now-playing card** (AA) | The Android Auto now-playing card. Displays title, artist, album art, and a subtitle via `MediaMetadataCompat`. The subtitle holds up to 2 lines (current lyric, bright/bold, plus the next line dimmed, or a translation) when no compact-mode second tile is available for lyrics. Updated every 200ms. |
 | **Small fast-updating screen** | The now-playing card when AA is in the *minimized* container (e.g. maps in the larger panel). |
 | **Large fast-updating screen** | The now-playing card when it fills the larger AA container. |
 | **Performance Mode** (Phone) | A separate full-screen immersive activity with large karaoke text and word pop-out. |
@@ -89,8 +89,8 @@ AutoLyricsApp (Application)
 
 | Constant | Value | Purpose |
 |---|---|---|
-| `WINDOW_SIZE` | 3 | Number of synced lyric lines in the AA browse tree window. |
-| `PLAIN_WINDOW_SIZE` | 4 | Number of unsynced lyric lines in the AA browse tree window. |
+| `LYRICS_WINDOW_SIZE` | 4 | Number of lyric lines (synced or unsynced) in the AA browse tree window. |
+| `LYRICS_LINES_BEFORE` | 1 | Lines shown before the active line in the window (remaining lines in the window trail after it — with size 4 that's 1 before, current, 2 after). |
 | `PAD_WIDTH` | 60 | Character padding for browse tree items (reduces choppiness). |
 | `NOTIFY_THROTTLE_MS` | 500ms | Minimum interval between browse tree refreshes. |
 | `BROWSE_KARAOKE_WINDOW_MS` | 600ms | Karaoke bracket time window for browse tree items. |

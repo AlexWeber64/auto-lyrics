@@ -84,16 +84,20 @@ Since this app is installed outside the Play Store, Android Auto requires **deve
 3. **Lyrics fetch**: The app queries [LRCLIB](https://lrclib.net/api) — first an exact match (`/api/get`), then a keyword search (`/api/search`) as fallback
 4. **LRC parsing**: Synced lyrics in `[mm:ss.xx] text` format are parsed into timestamped lines
 5. **Position tracking**: Playback position is calculated from the media session's last reported position + elapsed time, checked every 150ms
-6. **Display**: On Android Auto, a `PaneTemplate` shows 4 lyric lines centered on the current one, marked with ▶. The screen refreshes only when the active line changes.
+6. **Display**: On Android Auto, this is a media-session integration (`MediaBrowserServiceCompat` + `MediaSessionCompat`), not the Car App Library. The "full lyrics" browse list shows 4 lyric lines (1 before, the active line, and 2 after), marked with ▶ and dimmed/bright text styling on supporting hosts. The now-playing card shows the title, album art, and up to 2 lyric lines (current + next) in the subtitle. The screen refreshes only when the active line changes.
 
 ## Limitations
 
-- **Android Auto app categories**: The app registers as an IOT-category Car App. For Google Play distribution, it would need to pass Android Auto app review.
+- **Android Auto app category**: The app registers as a `media`-category app (see `automotive_app_desc.xml`), using the standard `MediaBrowserServiceCompat`/`MediaSessionCompat` integration rather than the Car App Library. This means Android Auto's own host chrome controls list/now-playing rendering; the app cannot draw fully custom templates or guarantee color styling on every host. For Google Play distribution, it would need to pass Android Auto app review.
 - **Lyrics availability**: Not all songs have synced lyrics on LRCLIB. The app will show "No synced lyrics available" for missing tracks.
 - **Player compatibility**: Most major music players expose media sessions correctly. Some niche players may not provide full metadata.
 - **Streaming quality tags**: Some music apps (YouTube Music, Tidal, etc.) inject quality info like "Lossless" or "Hi-Res" into metadata fields. The app strips these automatically, but unusual formats may slip through.
 - **Sideloaded apps on Android Auto**: Developer mode must be enabled in Android Auto settings to see sideloaded apps. See setup instructions above.
 
+## Credits
+
+This project is a modified version of [auto-lyrics](https://github.com/GitUpGitUp/auto-lyrics) by [GitUpGitUp](https://github.com/GitUpGitUp), used and distributed under the MIT License (see `LICENSE`).
+
 ## License
 
-MIT
+MIT — see [`LICENSE`](LICENSE).

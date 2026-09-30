@@ -2,6 +2,8 @@ package com.autolyrics.auto
 
 import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Typeface
 import android.media.session.MediaController
 import android.media.session.PlaybackState
 import android.os.Bundle
@@ -12,7 +14,13 @@ import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import androidx.media.MediaBrowserServiceCompat
+import androidx.media.utils.MediaConstants
 import com.autolyrics.media.MediaTracker
 import com.autolyrics.model.LyricLine
 import com.autolyrics.model.LyricsState
@@ -64,9 +72,12 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         private const val SYNC_MINUS_ID = "sync_minus"
         private const val SYNC_PLUS_ID = "sync_plus"
         private const val SYNC_STEP_MS = 50L
-        private const val WINDOW_SIZE = 3
-        private const val PLAIN_WINDOW_SIZE = 4
+        private const val LYRICS_WINDOW_SIZE = 4
+        private const val LYRICS_LINES_BEFORE = 1
         private const val PAD_WIDTH = 60
+        private const val EXPANDED_LYRICS_GROUP_TITLE = "Expanded Lyrics"
+        private val COLOR_ACTIVE_LINE = Color.WHITE
+        private val COLOR_DIM_LINE = Color.parseColor("#AAAAAA")
         private const val NOTIFY_THROTTLE_MS = 500L
         private const val BROWSE_KARAOKE_WINDOW_MS = 600L
         private const val SUBTITLE_KARAOKE_WINDOW_MS = 300L
@@ -139,7 +150,17 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         clientUid: Int,
         rootHints: Bundle?
     ): BrowserRoot {
-        return BrowserRoot(ROOT_ID, null)
+        val rootExtras = Bundle().apply {
+            putInt(
+                MediaConstants.DESCRIPTION_EXTRAS_KEY_CONTENT_STYLE_BROWSABLE,
+                MediaConstants.DESCRIPTION_EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM
+            )
+            putInt(
+                MediaConstants.DESCRIPTION_EXTRAS_KEY_CONTENT_STYLE_PLAYABLE,
+                MediaConstants.DESCRIPTION_EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM
+            )
+        }
+        return BrowserRoot(ROOT_ID, rootExtras)
     }
 
     override fun onLoadChildren(
@@ -162,7 +183,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
         when (state.status) {
             LyricsStatus.NO_MEDIA -> {
-                items.add(buildTextItem("no_media", "Play a song to see lyrics"))
+                items.add(buildTextItem("no_media", "Play a song to see lyrics", groupTitle = EXPANDED_LYRICS_GROUP_TITLE))
             }
             LyricsStatus.LOADING -> {
                 addTrackHeader(state, items)
@@ -196,15 +217,17 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
                             .coerceIn(0, state.lines.size - 1)
                     } else { 0 }
 
-                    val half = PLAIN_WINDOW_SIZE / 2
-                    val winStart = maxOf(0, estimatedIdx - half)
-                    val winEnd = minOf(state.lines.size, winStart + PLAIN_WINDOW_SIZE)
-                    val adjStart = maxOf(0, winEnd - PLAIN_WINDOW_SIZE)
+                    val winStart = maxOf(0, estimatedIdx - LYRICS_LINES_BEFORE)
+                    val winEnd = minOf(state.lines.size, winStart + LYRICS_WINDOW_SIZE)
+                    val adjStart = maxOf(0, winEnd - LYRICS_WINDOW_SIZE)
 
                     for (i in adjStart until winEnd) {
+                        val isCurrent = i == estimatedIdx
+                        val prefix = if (isCurrent) "▶  " else "    "
                         val text = state.lines[i].text.ifBlank { "♪" }
+                        val padded = "$prefix$text".padEnd(PAD_WIDTH)
                         val trans = state.translatedLines?.getOrNull(i)?.takeIf { it.isNotBlank() }
-                        items.add(buildTextItem("line_$i", "    $text", pad = true, subtitle = trans))
+                        items.add(buildTextItem("line_$i", styledLine(padded, isCurrent), subtitle = trans))
                     }
                 }
                 items.add(buildBrowsableItem(SYNC_MENU_ID, "⟳ Sync", "Adjust offset"))
@@ -277,6 +300,9 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             .setMediaId("header")
             .setTitle(track.title)
             .setSubtitle(subtitle)
+            .setExtras(Bundle().apply {
+                putString(MediaConstants.DESCRIPTION_EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, EXPANDED_LYRICS_GROUP_TITLE)
+            })
 
         val headerArt = state.albumArt ?: lastAlbumArt
         headerArt?.let { art ->
@@ -310,11 +336,10 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
         val posMs = getAaPositionMs()
         val aaCurrentIdx = findLineIndex(lines, posMs).coerceAtLeast(0)
-        val half = WINDOW_SIZE / 2
 
-        val windowStart = maxOf(0, aaCurrentIdx - half)
-        val windowEnd = minOf(lines.size, windowStart + WINDOW_SIZE)
-        val adjustedStart = maxOf(0, windowEnd - WINDOW_SIZE)
+        val windowStart = maxOf(0, aaCurrentIdx - LYRICS_LINES_BEFORE)
+        val windowEnd = minOf(lines.size, windowStart + LYRICS_WINDOW_SIZE)
+        val adjustedStart = maxOf(0, windowEnd - LYRICS_WINDOW_SIZE)
 
         for (i in adjustedStart until windowEnd) {
             val line = lines[i]
@@ -327,17 +352,39 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
                 line.text.ifBlank { "♪" }
             }
 
+            val padded = "$prefix$text".padEnd(PAD_WIDTH)
             val trans = state.translatedLines?.getOrNull(i)?.takeIf { it.isNotBlank() }
-            items.add(buildTextItem("line_$i", "$prefix$text", pad = true, subtitle = trans))
+            items.add(buildTextItem("line_$i", styledLine(padded, isCurrent), subtitle = trans))
         }
     }
 
-    private fun buildTextItem(id: String, text: String, pad: Boolean = false, subtitle: String? = null): MediaBrowserCompat.MediaItem {
-        val title = if (pad) text.padEnd(PAD_WIDTH) else text
+    private fun styledLine(text: CharSequence, isCurrent: Boolean): CharSequence {
+        val spannable = SpannableString(text)
+        val color = if (isCurrent) COLOR_ACTIVE_LINE else COLOR_DIM_LINE
+        spannable.setSpan(ForegroundColorSpan(color), 0, spannable.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (isCurrent) {
+            spannable.setSpan(StyleSpan(Typeface.BOLD), 0, spannable.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return spannable
+    }
+
+    private fun buildTextItem(
+        id: String,
+        text: CharSequence,
+        pad: Boolean = false,
+        subtitle: String? = null,
+        groupTitle: String? = null
+    ): MediaBrowserCompat.MediaItem {
+        val title: CharSequence = if (pad && text is String) text.padEnd(PAD_WIDTH) else text
         val builder = MediaDescriptionCompat.Builder()
             .setMediaId(id)
             .setTitle(title)
         if (!subtitle.isNullOrBlank()) builder.setSubtitle(subtitle)
+        if (groupTitle != null) {
+            builder.setExtras(Bundle().apply {
+                putString(MediaConstants.DESCRIPTION_EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, groupTitle)
+            })
+        }
         return MediaBrowserCompat.MediaItem(
             builder.build(),
             MediaBrowserCompat.MediaItem.FLAG_PLAYABLE
@@ -432,7 +479,7 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         lastKaraokeText = null
     }
 
-    private fun getSubtitleText(state: LyricsState): String {
+    private fun getSubtitleText(state: LyricsState): CharSequence {
         val posMs = getAaPositionMs()
 
         if (state.status == LyricsStatus.FOUND) {
@@ -445,7 +492,13 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
                     line.text
                 }
                 val trans = state.translatedLines?.getOrNull(lineIdx)?.takeIf { it.isNotBlank() }
-                return if (trans != null) "$original\n$trans" else original
+                if (trans != null) return buildTwoLineSubtitle(original, trans, dimSecondLine = false)
+                val nextLine = state.lines.getOrNull(lineIdx + 1)?.text?.takeIf { it.isNotBlank() }
+                return if (nextLine != null) {
+                    buildTwoLineSubtitle(original, nextLine, dimSecondLine = true)
+                } else {
+                    styledLine(original, isCurrent = true)
+                }
             }
         }
 
@@ -457,7 +510,13 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             } else { 0 }
             val original = state.lines[idx].text
             val trans = state.translatedLines?.getOrNull(idx)?.takeIf { it.isNotBlank() }
-            return if (trans != null) "$original\n$trans" else original
+            if (trans != null) return buildTwoLineSubtitle(original, trans, dimSecondLine = false)
+            val nextLine = state.lines.getOrNull(idx + 1)?.text?.takeIf { it.isNotBlank() }
+            return if (nextLine != null) {
+                buildTwoLineSubtitle(original, nextLine, dimSecondLine = true)
+            } else {
+                styledLine(original, isCurrent = true)
+            }
         }
 
         return when (state.status) {
@@ -466,6 +525,14 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             LyricsStatus.ERROR -> "Error loading lyrics"
             else -> ""
         }
+    }
+
+    private fun buildTwoLineSubtitle(first: String, second: String, dimSecondLine: Boolean): CharSequence {
+        val builder = SpannableStringBuilder()
+        builder.append(styledLine(first, isCurrent = true))
+        builder.append("\n")
+        builder.append(if (dimSecondLine) styledLine(second, isCurrent = false) else second)
+        return builder
     }
 
     // --- MediaSession management ---
@@ -511,12 +578,12 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
 
         val subtitleText = getSubtitleText(state)
         if (subtitleText.isNotBlank()) {
-            metaBuilder.putString(
+            metaBuilder.putText(
                 MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE,
                 subtitleText
             )
         }
-        lastSubtitleText = subtitleText
+        lastSubtitleText = subtitleText.toString()
 
         mediaSession.setMetadata(metaBuilder.build())
         mediaSession.setPlaybackState(buildPlaybackState(state))
@@ -528,12 +595,13 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
         if (state.status != LyricsStatus.FOUND && state.status != LyricsStatus.PLAIN_ONLY) return
 
         val subtitleText = getSubtitleText(state)
-        if (subtitleText == lastSubtitleText) return
-        lastSubtitleText = subtitleText
+        val subtitlePlain = subtitleText.toString()
+        if (subtitlePlain == lastSubtitleText) return
+        lastSubtitleText = subtitlePlain
 
         val metaBuilder = buildBaseMetadata(state)
         if (subtitleText.isNotBlank()) {
-            metaBuilder.putString(
+            metaBuilder.putText(
                 MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE,
                 subtitleText
             )
@@ -593,9 +661,8 @@ class LyricsBrowserService : MediaBrowserServiceCompat() {
             findLineIndex(lines, posMs).coerceAtLeast(0)
         }
 
-        val winSize = if (isPlain) PLAIN_WINDOW_SIZE else WINDOW_SIZE
-        val half = winSize / 2
-        val windowStart = maxOf(0, currentIdx - half)
+        val winSize = LYRICS_WINDOW_SIZE
+        val windowStart = maxOf(0, currentIdx - LYRICS_LINES_BEFORE)
         val windowEnd = minOf(lines.size, windowStart + winSize)
         val adjustedStart = maxOf(0, windowEnd - winSize)
         return WindowInfo(adjustedStart, windowEnd, currentIdx)
