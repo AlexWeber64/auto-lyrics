@@ -4,11 +4,11 @@ An Android Auto app that displays synced lyrics for the currently playing song, 
 
 ## Features
 
-- **Synced lyrics on Android Auto** — shows the current lyric line with surrounding context, updated in real-time
-- **Works with any music player** — Spotify, YouTube Music, Apple Music, Poweramp, etc.
-- **Phone companion view** — see lyrics on your phone screen too
-- **Automatic song detection** — picks up whatever is playing via media session APIs
-- **Multi-strategy lyrics lookup** — tries exact match first, falls back to keyword search
+- **Synced lyrics on Android Auto**: shows the current lyric line with surrounding context, updated in real-time
+- **Works with any music player**: Spotify, YouTube Music, Apple Music, Poweramp, etc.
+- **Phone companion view**: see lyrics on your phone screen too
+- **Automatic song detection**: picks up whatever is playing via media session APIs
+- **Multi-strategy lyrics lookup**: tries exact match first, falls back to keyword search
 
 ## Architecture
 
@@ -47,7 +47,7 @@ LyricsScreen      MainActivity
 ### First-Time Setup
 
 1. **Open Auto Lyrics** on your phone
-2. **Grant notification access** — tap the button and enable "Auto Lyrics" in the system settings
+2. **Grant notification access**: tap the button and enable "Auto Lyrics" in the system settings
 3. **Play a song** in any music app
 4. Lyrics will appear both on the phone and on Android Auto
 
@@ -75,13 +75,13 @@ Since this app is installed outside the Play Store, Android Auto requires **deve
 5. Enable **"Unknown sources"** (allows sideloaded apps on Android Auto)
 6. Restart Android Auto or disconnect/reconnect to your car
 7. **Auto Lyrics** should now appear in the Android Auto app launcher
-8. Play music — lyrics appear automatically
+8. Play music, and lyrics appear automatically
 
 ## How It Works
 
 1. **Media detection**: A `NotificationListenerService` grants access to `MediaSessionManager`, which provides the currently active media controllers
 2. **Song identification**: When the song changes, metadata (title, artist, album, duration) is extracted from the `MediaController`
-3. **Lyrics fetch**: The app queries [LRCLIB](https://lrclib.net/api) — first an exact match (`/api/get`), then a keyword search (`/api/search`) as fallback
+3. **Lyrics fetch**: The app queries the [LRCLIB API](https://lrclib.net/docs), trying an exact match (`/api/get`) first and falling back to a keyword search (`/api/search`)
 4. **LRC parsing**: Synced lyrics in `[mm:ss.xx] text` format are parsed into timestamped lines
 5. **Position tracking**: Playback position is calculated from the media session's last reported position + elapsed time, checked every 150ms
 6. **Display**: On Android Auto, this is a media-session integration (`MediaBrowserServiceCompat` + `MediaSessionCompat`), not the Car App Library. The "full lyrics" browse list shows 4 lyric lines (1 before, the active line, and 2 after), marked with ▶ and dimmed/bright text styling on supporting hosts. The now-playing card shows the title, album art, and up to 2 lyric lines (current + next) in the subtitle. The screen refreshes only when the active line changes.
@@ -100,4 +100,4 @@ This project is a modified version of [auto-lyrics](https://github.com/GitUpGitU
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).
