@@ -1,10 +1,10 @@
-# Auto Lyrics — Development Reference
+# Auto Lyrics: Development Reference
 
 ## Terminology
 
 | Term | Meaning |
 |---|---|
-| **Full lyrics view** (AA) | The scrollable browse-tree list of lyric lines on Android Auto, powered by `onLoadChildren()`. Shows a windowed subset of 4 lines (1 before the active line, the active line, and 2 after), with the active line bright/bold and others dimmed (best-effort text styling — not guaranteed on every host, since this is a `MediaBrowserServiceCompat` list, not a Car App Library template). |
+| **Full lyrics view** (AA) | The scrollable browse-tree list of lyric lines on Android Auto, powered by `onLoadChildren()`. Shows a windowed subset of 4 lines (1 before the active line, the active line, and 2 after), with the active line bright/bold and others dimmed (best-effort text styling that is not guaranteed on every host, since this is a `MediaBrowserServiceCompat` list, not a Car App Library template). |
 | **Fast-updating screen** / **Now-playing card** (AA) | The Android Auto now-playing card. Displays title, artist, album art, and a subtitle via `MediaMetadataCompat`. The subtitle holds up to 2 lines (current lyric, bright/bold, plus the next line dimmed, or a translation) when no compact-mode second tile is available for lyrics. Updated every 200ms. |
 | **Small fast-updating screen** | The now-playing card when AA is in the *minimized* container (e.g. maps in the larger panel). |
 | **Large fast-updating screen** | The now-playing card when it fills the larger AA container. |
@@ -21,25 +21,25 @@
 
 ```
 AutoLyricsApp (Application)
-  └─ MediaTracker (singleton) — playback tracking, lyrics fetching, state emission
-       ├─ MediaListenerService (NotificationListenerService) — intercepts media notifications
-       ├─ SyncLrcClient / LrcLibClient — lyrics API clients
-       ├─ LrcParser — LRC/ELRC parsing
-       ├─ MetadataCleaner — cleans track metadata for API queries
-       ├─ LyricsCache — in-memory + background refresh + queue pre-fetch
-       └─ AlbumColorExtractor — Palette API color extraction
+  └─ MediaTracker (singleton): playback tracking, lyrics fetching, state emission
+       ├─ MediaListenerService (NotificationListenerService): intercepts media notifications
+       ├─ SyncLrcClient / LrcLibClient: lyrics API clients
+       ├─ LrcParser: LRC/ELRC parsing
+       ├─ MetadataCleaner: cleans track metadata for API queries
+       ├─ LyricsCache: in-memory + background refresh + queue pre-fetch
+       └─ AlbumColorExtractor: Palette API color extraction
 
   Phone UI
-  ├─ MainActivity — main lyrics view, settings, sync tools
-  └─ PerformanceActivity — full-screen immersive karaoke view
+  ├─ MainActivity: main lyrics view, settings, sync tools
+  └─ PerformanceActivity: full-screen immersive karaoke view
 
   Android Auto
   ├─ LyricsBrowserService (MediaBrowserServiceCompat)
-  │   ├─ Browse tree (onLoadChildren) — flat single-level: track header + windowed lyrics + sync controls
-  │   ├─ MediaSession — metadata (title, art, subtitle), playback state
-  │   ├─ Karaoke bracket builder — buildKaraokeText()
-  │   └─ Transport controls proxy — forwards play/pause/seek to source player
-  └─ BootReceiver — starts service on boot/package replace
+  │   ├─ Browse tree (onLoadChildren): flat single level with track header + windowed lyrics + sync controls
+  │   ├─ MediaSession: metadata (title, art, subtitle), playback state
+  │   ├─ Karaoke bracket builder: buildKaraokeText()
+  │   └─ Transport controls proxy: forwards play/pause/seek to source player
+  └─ BootReceiver: starts service on boot/package replace
 ```
 
 ## File Map
@@ -53,7 +53,7 @@ AutoLyricsApp (Application)
 | `PerformanceActivity.kt` | Full-screen immersive karaoke mode with large text and word pop-out effect. |
 | `model/Models.kt` | Data classes: `TrackInfo`, `LyricWord`, `LyricLine`, `AlbumColors`, `LyricsStatus`, `LyricsState`. |
 | `media/MediaTracker.kt` | Singleton. Tracks active media session, fetches lyrics, manages offset, emits `StateFlow<LyricsState>`. |
-| `media/MediaListenerService.kt` | `NotificationListenerService` — detects media sessions. |
+| `media/MediaListenerService.kt` | `NotificationListenerService` that detects media sessions. |
 | `lyrics/SyncLrcClient.kt` | HTTP client for SyncLRC API (primary source). |
 | `lyrics/LrcLibClient.kt` | HTTP client for LRCLIB API (fallback source). |
 | `lyrics/LrcParser.kt` | Parses LRC and ELRC format strings into `LyricLine` lists. |
@@ -90,7 +90,7 @@ AutoLyricsApp (Application)
 | Constant | Value | Purpose |
 |---|---|---|
 | `LYRICS_WINDOW_SIZE` | 4 | Number of lyric lines (synced or unsynced) in the AA browse tree window. |
-| `LYRICS_LINES_BEFORE` | 1 | Lines shown before the active line in the window (remaining lines in the window trail after it — with size 4 that's 1 before, current, 2 after). |
+| `LYRICS_LINES_BEFORE` | 1 | Lines shown before the active line in the window (remaining lines in the window trail after it; with size 4 that's 1 before, current, 2 after). |
 | `PAD_WIDTH` | 60 | Character padding for browse tree items (reduces choppiness). |
 | `NOTIFY_THROTTLE_MS` | 500ms | Minimum interval between browse tree refreshes. |
 | `BROWSE_KARAOKE_WINDOW_MS` | 600ms | Karaoke bracket time window for browse tree items. |
@@ -117,6 +117,6 @@ The bracket display uses **monotonic advancement** to avoid visual jitter:
 
 ## Lyrics Fetch Priority
 
-1. **SyncLRC** (`synclrc.tharuk.pro`) — returns karaoke (ELRC), synced (LRC), or plain text.
-2. **LRCLIB** (`lrclib.net`) — fallback, returns synced (LRC) or plain text.
+1. **SyncLRC** (`synclrc.tharuk.pro`): returns karaoke (ELRC), synced (LRC), or plain text.
+2. **LRCLIB** (`lrclib.net`): fallback; returns synced (LRC) or plain text.
 3. Within a response, preference: karaoke > synced > plain.
