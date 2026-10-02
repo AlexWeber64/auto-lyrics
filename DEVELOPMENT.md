@@ -82,9 +82,20 @@ AutoLyricsApp (Application)
 |---|---|
 | `app/build.gradle.kts` | Dependencies, SDK versions, signing config, version management. |
 | `AndroidManifest.xml` | Components, permissions, AA metadata. |
-| `.github/workflows/build.yml` | CI: build APK, create GitHub release with versioned filename. |
+| `.gitlab-ci.yml` | CI: builds the APK on merge requests and `main`, and publishes a release for `v*` tags (see Releasing). |
 | `app/signing.p12` | Optional shared signing keystore. Not committed; see the comment at the top of `app/build.gradle.kts`. |
 
+## Releasing
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`, and merge that to `main`.
+2. Tag the merged commit with `v` plus the `versionName`, and push the tag:
+   ```bash
+   git tag v1.10.0
+   git push origin v1.10.0
+   ```
+3. The tag pipeline builds the APK, uploads it to the project's package registry, and publishes a GitLab release that links to it, with the commits since the previous tag as its notes.
+
+If the tag doesn't match `versionName`, the release job stops before publishing anything. Release builds are signed with a fresh debug key each time (the shared `app/signing.p12` isn't in CI), so installing one over an earlier build requires uninstalling first.
 ## Key Constants (`LyricsBrowserService`)
 
 | Constant | Value | Purpose |
