@@ -1,7 +1,8 @@
-# Builds the debug APK on every merge request and every push to main, and
-# keeps it as a downloadable artifact named after the app's versionName.
+# Builds the debug APK on every merge request, every push to main, and every
+# tag, and keeps it as a downloadable artifact named after the app's
+# versionName. Pushing a v* tag (e.g. v1.10.0) also publishes a release.
 
-# Run for merge requests and the default branch, without a duplicate
+# Run for merge requests, the default branch, and tags, without a duplicate
 # branch pipeline for every push to an open merge request.
 workflow:
   rules:
@@ -9,6 +10,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
 
 build:
   # The repo has no Gradle wrapper jar, so this uses an image that ships
@@ -42,7 +44,50 @@ build:
     - gradle assembleDebug --no-daemon --stacktrace
     - VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
     - cp app/build/outputs/apk/debug/app-debug.apk "auto-lyrics-$VERSION.apk"
+    - echo "VERSION=$VERSION" > version.env
   artifacts:
     name: "auto-lyrics-$CI_COMMIT_SHORT_SHA"
     paths: [auto-lyrics-*.apk]
+    reports:
+      dotenv: version.env  # hands VERSION to the release job
     expire_in: 30 days
+
+# Publishes a GitLab release for a v* tag. The APK goes into the project's
+# package registry, which (unlike job artifacts) never expires, and the
+# release links to it, with the commits since the previous tag as its notes.
+release:
+  stage: deploy
+  image: alpine:3.22
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v/
+  needs: [build]
+  variables:
+    GIT_DEPTH: "0"  # full history, for the release notes
+  before_script:
+    - apk add --no-cache --quiet curl git jq
+  script:
+    - |
+      if [ "$CI_COMMIT_TAG" != "v$VERSION" ]; then
+        echo "Tag $CI_COMMIT_TAG doesn't match versionName $VERSION in app/build.gradle.kts, so nothing was released."
+        exit 1
+      fi
+    - FILE="auto-lyrics-$VERSION.apk"
+    - PACKAGE_URL="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/auto-lyrics/$VERSION/$FILE"
+    - 'curl --fail-with-body --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$FILE" "$PACKAGE_URL"'
+    - git fetch --quiet --tags origin
+    - PREVIOUS=$(git describe --tags --abbrev=0 --match 'v*' "$CI_COMMIT_TAG^" 2>/dev/null || true)
+    - |
+      {
+        echo "Debug build of Auto Lyrics $VERSION. Each CI build is signed with a fresh debug key, so uninstall any earlier build before installing this one."
+        if [ -n "$PREVIOUS" ]; then
+          printf '\n## Changes since %s\n\n' "$PREVIOUS"
+          git log --no-merges --format='- %s' "$PREVIOUS..$CI_COMMIT_TAG"
+        fi
+      } > notes.md
+    - |
+      jq -n --arg tag "$CI_COMMIT_TAG" --arg name "Auto Lyrics $VERSION" --rawfile notes notes.md \
+            --arg file "$FILE" --arg url "$PACKAGE_URL" \
+        '{tag_name: $tag, name: $name, description: $notes,
+          assets: {links: [{name: $file, url: $url, direct_asset_path: ("/" + $file), link_type: "package"}]}}' \
+      | curl --fail-with-body --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --header "Content-Type: application/json" --data @- "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases"
