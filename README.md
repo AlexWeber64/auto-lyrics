@@ -1,5 +1,7 @@
 # Auto Lyrics
 
+[![pipeline status](https://gitlab.com/AlexWeber64/auto-lyrics/badges/main/pipeline.svg)](https://gitlab.com/AlexWeber64/auto-lyrics/-/pipelines)
+
 An Android Auto app that displays synced lyrics for the currently playing song, powered by [LRCLIB](https://lrclib.net/).
 
 ## Features
