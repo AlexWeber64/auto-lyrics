@@ -1,0 +1,46 @@
+# Builds the debug APK on every merge request and every push to main, and
+# keeps it as a downloadable artifact named after the app's versionName.
+
+# Run for merge requests and the default branch, without a duplicate
+# branch pipeline for every push to an open merge request.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+build:
+  # The repo has no Gradle wrapper jar, so this uses an image that ships
+  # Gradle 8.4. Gradle 8.4 can't run on Java 21, hence JDK 17.
+  image: gradle:8.4-jdk17
+  variables:
+    ANDROID_HOME: "$CI_PROJECT_DIR/.android-sdk"
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-home"
+    # Google's command-line SDK tools. Once the licenses are accepted, Gradle
+    # downloads the SDK platform and build tools the app needs by itself.
+    ANDROID_CMDLINE_TOOLS: "16111833"
+  cache:
+    key:
+      files: [build.gradle.kts, app/build.gradle.kts]
+    paths: [.android-sdk/, .gradle-home/caches/]
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl unzip > /dev/null
+    - |
+      if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+        curl -sSfL -o /tmp/cmdline-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS}_latest.zip"
+        unzip -q /tmp/cmdline-tools.zip -d /tmp
+        mkdir -p "$ANDROID_HOME/cmdline-tools"
+        mv /tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+      fi
+    - (yes || true) | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+  script:
+    # Without app/signing.p12 (never committed), the build falls back to the
+    # standard debug key.
+    - gradle assembleDebug --no-daemon --stacktrace
+    - VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+    - cp app/build/outputs/apk/debug/app-debug.apk "auto-lyrics-$VERSION.apk"
+  artifacts:
+    name: "auto-lyrics-$CI_COMMIT_SHORT_SHA"
+    paths: [auto-lyrics-*.apk]
+    expire_in: 30 days
